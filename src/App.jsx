@@ -1,95 +1,78 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { CheckCircle, XCircle, AlertTriangle, RotateCcw, Award, ChevronRight, HelpCircle, Volume2, Bot, BookOpen } from 'lucide-react';
+import { CheckCircle, XCircle, AlertTriangle, RotateCcw, Award, ChevronRight, HelpCircle, Volume2, Bot, BookOpen, VolumeX } from 'lucide-react';
 
-// --- [TTS/PCM 轉 WAV 輔助函式] ---
-// (這部分程式碼已確認正確且必要，保持不變，但在實際專案中建議移至 utils 文件)
-const base64ToArrayBuffer = (base64) => {
-  const binaryString = window.atob(base64);
-  const len = binaryString.length;
-  const bytes = new Uint8Array(len);
-  for (let i = 0; i < len; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  return bytes.buffer;
+// --- [嵌入式圖示組件集] ---
+
+// 1. 煙霧警報器圖示
+const SmokeDetectorIcon = ({ className }) => (
+    <svg width="128" height="128" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        <circle cx="12" cy="12" r="10" fill="#E0F2FE" stroke="#3B82F6" strokeWidth="2"/>
+        <path d="M8 8a8 8 0 0 1 8 8" stroke="#FBBF24" strokeWidth="1.5"/>
+        <path d="M16 8a8 8 0 0 0-8 8" stroke="#FBBF24" strokeWidth="1.5"/>
+        <path d="M12 18a1 1 0 1 0 0-2 1 1 0 0 0 0 2z" fill="#DC2626"/>
+        <path d="M12 6v6l4 2" stroke="#1D4ED8" strokeWidth="2"/>
+        <path d="M8 12h8" stroke="#1D4ED8" strokeWidth="2"/>
+    </svg>
+);
+
+// 2. 滅火器圖示
+const FireExtinguisherIcon = ({ className }) => (
+    <svg width="128" height="128" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        <path d="M12 7v-3" stroke="#374151" strokeWidth="2"/>
+        <path d="M9 4h6" stroke="#374151" strokeWidth="2"/>
+        <path d="M15 4l1-2" stroke="#374151"/>
+        <rect x="7" y="7" width="10" height="14" rx="2" fill="#FCA5A5" stroke="#DC2626" strokeWidth="2"/>
+        <path d="M12 7v14" stroke="#B91C1C" strokeWidth="1"/>
+        <path d="M15 11h-2" stroke="#B91C1C"/>
+        <path d="M12 4l-3 3" stroke="#374151"/> 
+    </svg>
+);
+
+// 3. 緊急出口/逃生圖示
+const EmergencyExitIcon = ({ className }) => (
+    <svg width="128" height="128" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        <path d="M3 21h18" stroke="#374151"/>
+        <path d="M5 21V7a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v14" fill="#D1FAE5"/>
+        <path d="M12 11v4" stroke="#047857"/>
+        <path d="M10 21v-4a2 2 0 0 1 4 0v4" fill="#fff"/>
+        <circle cx="16" cy="12" r="1" fill="#047857"/>
+        <path d="M19 4l-2 2" stroke="#059669"/>
+    </svg>
+);
+
+// 4. 一般防災/火焰圖示
+const GeneralSafetyIcon = ({ className }) => (
+    <svg width="128" height="128" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.1.2-2.2.6-3.3a7 7 0 0 0 2.9 2.8z" fill="#FEF3C7"/>
+        <path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5-2-1.6-3.5-4-4-6.5-2.224 1.946-3.072 3.857-2 6 .5 1 1 1.62 1 3a2.5 2.5 0 0 1-2.5 2.5" />
+    </svg>
+);
+
+// --- [圖示分配對照表] ---
+const questionIconMap = {
+  1: SmokeDetectorIcon,
+  2: FireExtinguisherIcon,
+  3: EmergencyExitIcon,
+  4: SmokeDetectorIcon,
+  5: SmokeDetectorIcon,
+  6: FireExtinguisherIcon,
+  7: EmergencyExitIcon,
+  8: GeneralSafetyIcon,
+  9: EmergencyExitIcon,
+  10: GeneralSafetyIcon,
+  11: FireExtinguisherIcon,
+  12: SmokeDetectorIcon,
+  13: GeneralSafetyIcon,
+  14: EmergencyExitIcon,
+  15: GeneralSafetyIcon,
+  16: SmokeDetectorIcon,
+  17: GeneralSafetyIcon,
+  18: SmokeDetectorIcon,
+  19: FireExtinguisherIcon,
+  20: EmergencyExitIcon
 };
 
-const writeString = (view, offset, string) => {
-  for (let i = 0; i < string.length; i++) {
-    view.setUint8(offset + i, string.charCodeAt(i));
-  }
-};
-
-const pcmToWav = (pcmData, sampleRate) => {
-  const numChannels = 1;
-  const bitsPerSample = 16;
-  const byteRate = sampleRate * numChannels * (bitsPerSample / 8);
-  const blockAlign = numChannels * (bitsPerSample / 8);
-  
-  const buffer = new ArrayBuffer(44 + pcmData.byteLength);
-  const view = new DataView(buffer);
-  
-  // RIFF identifier
-  writeString(view, 0, 'RIFF');
-  // file length
-  view.setUint32(4, 36 + pcmData.byteLength, true);
-  // RIFF type
-  writeString(view, 8, 'WAVE');
-  // format chunk identifier
-  writeString(view, 12, 'fmt ');
-  // format chunk length
-  view.setUint32(16, 16, true);
-  // sample format (1 for PCM)
-  view.setUint16(20, 1, true);
-  // channel count
-  view.setUint16(22, numChannels, true);
-  // sample rate
-  view.setUint32(24, sampleRate, true);
-  // byte rate
-  view.setUint32(28, byteRate, true);
-  // block align
-  view.setUint16(32, blockAlign, true);
-  // bits per sample
-  view.setUint16(34, bitsPerSample, true);
-  // data chunk identifier
-  writeString(view, 36, 'data');
-  // data chunk length
-  view.setUint32(40, pcmData.byteLength, true);
-  
-  // PCM data
-  let offset = 44;
-  for (let i = 0; i < pcmData.length; i++) {
-    view.setInt16(offset, pcmData[i], true);
-    offset += 2;
-  }
-  
-  return new Blob([buffer], { type: 'audio/wav' });
-};
-// --- [TTS/PCM 轉 WAV 輔助函式結束] ---
-
-
-// Custom image assets for questions (used in JSX)
-const questionImages = {
-  1: "https://www.svgrepo.com/show/532354/smoke-detector.svg", 
-  2: "https://www.svgrepo.com/show/441460/fire-extinguisher.svg", 
-  3: "https://www.svgrepo.com/show/361845/fire-house.svg", 
-  4: "https://www.svgrepo.com/show/503460/maintenance.svg", 
-  5: "https://www.svgrepo.com/show/347633/kitchen-cook-cooking.svg", 
-  6: "https://www.svgrepo.com/show/441460/fire-extinguisher.svg", 
-  7: "https://www.svgrepo.com/show/496030/door-opened.svg", 
-  8: "https://www.svgrepo.com/show/465103/heater-heating.svg", 
-  9: "https://www.svgrepo.com/show/496096/family.svg", 
-  10: "https://www.svgrepo.com/show/305370/person-fall.svg", 
-  11: "https://www.svgrepo.com/show/441460/fire-extinguisher.svg", 
-  12: "https://www.svgrepo.com/show/532354/smoke-detector.svg", 
-  13: "https://www.svgrepo.com/show/305220/scam.svg", 
-  14: "https://www.svgrepo.com/show/441477/stairs-ladder.svg", 
-  15: "https://www.svgrepo.com/show/441460/fire-extinguisher.svg", 
-  16: "https://www.svgrepo.com/show/532354/smoke-detector.svg", 
-  17: "https://www.svgrepo.com/show/441460/fire-extinguisher.svg", 
-  18: "https://www.svgrepo.com/show/532354/smoke-detector.svg", 
-  19: "https://www.svgrepo.com/show/441460/fire-extinguisher.svg", 
-  20: "https://www.svgrepo.com/show/441477/stairs-ladder.svg", 
-};
+// --- [嵌入式圖示組件結束] ---
 
 const questionsData = [
   { id: 1, question: "住宅中最重要的消防設備是甚麼？", options: ["滅火器", "緊急照明燈", "住宅用火災警報器", "緩降機"], correctAnswer: "住宅用火災警報器", explanation: "人們在睡覺時，對外界的視覺、觸覺及嗅覺都不甚靈敏，很難察覺火災的煙、熱或是燒焦味等到驚醒時，往往已經深陷火海，逃生困難，所以為了及早察覺火災，必須安裝住宅用火災警報器。", keyTerms: ["住宅用火災警報器"] },
@@ -99,348 +82,275 @@ const questionsData = [
   { id: 5, question: "偵煙式住宅用火災警報器不能裝在哪裡？", options: ["客廳", "廚房", "房間", "樓梯"], correctAnswer: "廚房", explanation: "因廚房平時可能有炒菜油煙，為了避免偵煙式住宅用火災警報器誤判，故類似廚房平時會產生煙粒子之場所，應裝設「定溫式」住宅用火災警報器為宜。", keyTerms: ["偵煙式", "定溫式", "誤判"] },
   { id: 6, question: "滅火器的使用順序，下列何者正確？", options: ["拉瞄壓掃", "瞄掃拉壓", "壓拉掃瞄", "掃壓瞄拉"], correctAnswer: "拉瞄壓掃", explanation: "滅火器的使用順序為：1.拉-拉插銷 2.瞄-瞄準火源底部 3.壓-壓握把 4.掃-向火源底部左右掃射。", keyTerms: ["滅火器", "拉瞄壓掃"] },
   { id: 7, question: "有關火場逃生避難的觀念，下列何者正確？", options: ["躲在浴室裡是最安全的", "逃生時要用濕毛巾摀口鼻", "開門若遇濃煙要越快穿越濃煙逃生", "如果樓梯間沒濃煙就往下逃生"], correctAnswer: "如果樓梯間沒濃煙就往下逃生", explanation: "不可躲在浴室：1)門多為塑膠不耐高溫 2)門下有通風百葉無法阻擋濃煙 3)無逃生出口。濕毛巾會浪費時間且無法擋高熱濃煙。遇濃煙應關門避難而非穿越。", keyTerms: ["濕毛巾", "濃煙"] },
-  { id: 8, question: "為了避免火災發生，下列何者為錯誤的生活習慣？", options: ["作飯煮菜時人若暫時離開，應先關閉瓦斯", "火柴、打火機應妥善收藏，以免小孩玩火", "冬天使用電暖器取暖時，可同時烘乾衣物", "排煙機及風管的油污應定期清理"], correctAnswer: "冬天使用電暖器取暖時，可同時烘乾衣物", explanation: "使用電熱器時，應距離可燃物1公尺以上，不可用來烘衣物，以免過熱起火。", keyTerms: ["電暖器", "電熱器"] },
-  { id: 9, question: "有關家庭逃生計畫的內容，下列何者為非？", options: ["應每1年全家人依計畫進行逃生演練1次", "全家人都要知道逃生至戶後的集結點", "要在家中找出2個不同方向之逃生避難路線", "窗戶若裝置鐵窗，應預留可開啟之逃生出口"], correctAnswer: "應每1年全家人依計畫進行逃生演練1次", explanation: "全家人應每6個月(半年)至少做1次逃生避難演練（建議每次輪流選擇日間及夜間時段進行演練），確認逃生計畫內容是具體可行的。", keyTerms: ["逃生計畫", "演練頻率"] },
-  { id: 10, question: "身上著火時，應立即做的動作步驟為下列何者？", options: ["停、躺、滾", "沖、脫、泡、蓋、送", "走、跑、跳"], correctAnswer: "停、躺、滾", explanation: "若身上著火：【停】在原地，切勿奔跑以免助長火勢。【躺】下來，立刻將雙手摀在臉上，減少顏面傷殘機會。【滾】左右來回翻滾，直到火勢熄滅。", keyTerms: ["停躺滾"] },
-  { id: 11, question: "阿豪與同事相揪團購滅火器，如何檢視廠商交貨之滅火器是否合格？", options: ["注意安全插梢是否固定未脫落", "產品應張貼有內政部登錄機構檢驗合格之標示", "滅火器上的壓力表，指針是否在綠色範圍", "以上皆是"], correctAnswer: "以上皆是", explanation: "檢查滅火器需注意：有認可標示、壓力表指針在綠色範圍、安全插梢固定且未鏽蝕、皮管無龜裂。", keyTerms: ["滅火器檢驗"] },
-  { id: 12, question: "陳爸爸為了居家安全，想網購火紅熱銷的「住宅用火災警報器」，以下敘述何者正確？", options: ["一定要由專業技術人員安裝", "一層樓裝設一顆住宅用火災警報器即免除風險", "廚房為使用火源場所，不必裝設，避免誤報", "產品應張貼有內政部登錄機構檢驗合格之標示"], correctAnswer: "產品應張貼有內政部登錄機構檢驗合格之標示", explanation: "住警器安裝容易可自行安裝；每個居室都建議安裝；廚房應安裝「定溫式」；選購時務必認明合格標示。", keyTerms: ["住警器選購", "合格標示"] },
-  { id: 13, question: "某民間協會稱其受消防機關委託，至公司進行防火宣導，順便推銷滅火器，下列作法何者最佳？", options: ["體諒其辛勞，買個幾具以示慰勞", "立即通報當地消防機關並拒絕購買", "協助向同仁推銷", "大量購買所推銷的滅火器並分送親朋好友"], correctAnswer: "立即通報當地消防機關並拒絕購買", explanation: "消防機關絕不會委託民間團體推銷消防安全設備，這通常是詐騙或推銷手法。", keyTerms: ["消防推銷"] },
-  { id: 14, question: "在正常皆可使用之狀態下，於相同時間內，下列得以疏散最多人的防火避難設施或避難器具是？", options: ["安全梯", "緩降機", "救助袋", "避難梯"], correctAnswer: "安全梯", explanation: "避難逃生應以樓梯、通道、安全門為主。在無法利用其他通道進行逃生動作時，才選擇利用緩降機等其他避難器具逃生。", keyTerms: ["安全梯", "避難器具"] },
-  { id: 15, question: "市售常見之泡沫滅火器，不應用於撲滅下列何種狀態之火災？", options: ["報紙堆起火", "炒菜時油鍋起火", "未通電的廢棄電線起火", "通電中的配電盤起火"], correctAnswer: "通電中的配電盤起火", explanation: "泡沫滅火器含水，通電中之電氣設備（如電器、變壓器、電線、配電盤等）引起之火災，不可使用泡沫，應適用二氧化碳滅火器或乾粉滅火器，以免觸電。", keyTerms: ["泡沫滅火器", "電氣火災"] },
-  { id: 16, question: "台灣的建築物火災，以住宅火災佔多數，如發生火災，下列何項消防設備，可發揮早期預警之功能？", options: ["一氧化碳警報器", "住宅用火災警報器", "緊急照明燈", "緩降機"], correctAnswer: "住宅用火災警報器", explanation: "當人們處於睡眠狀態時，對外界的感官不甚靈敏。藉由住宅用火災警報器偵知火災及發出警報聲響，能輔助人們及早發現火災，越早採取逃生行動。", keyTerms: ["早期預警", "住宅用火災警報器"] },
+  { id: 8, question: "為了避免火災發生，下列何者為錯誤的生活習慣？", options: ["作飯煮菜時人若暫時離開，應先關閉瓦斯", "火柴、打火機應妥善收藏，以免小孩玩火", "冬天使用電暖器取暖時，可同時烘乾衣物", "排煙機及風管的油污應定期清理"], correctAnswer: "冬天使用電暖器取暖時，可同時烘乾衣物", explanation: "電暖器溫度高，若長時間將衣物覆蓋，可能導致機體過熱引發火災。", keyTerms: ["電暖器", "烘乾衣物"] },
+  { id: 9, question: "平時應規劃2個逃生出口，其中一個為主要逃生出口，另一個為替代逃生出口，且應讓家人都知道，同時約定集合地點。", options: ["正確", "錯誤"], correctAnswer: "正確", explanation: "平時規劃逃生避難路線圖及約定集合地點是避難三步驟之一。", keyTerms: ["逃生出口", "集合地點"] },
+  { id: 10, question: "如果衣服不小心著火時，應立即怎麼做？", options: ["趕快跑動找水來滅火", "趕快用手拍熄", "立即停下來，倒在地上，用手保護臉部，來回滾動", "用手撥開火苗"], correctAnswer: "立即停下來，倒在地上，用手保護臉部，來回滾動", explanation: "口訣為「停、躺、滾」，可有效隔絕空氣，撲滅身上的火。", keyTerms: ["停躺滾"] },
+  { id: 11, question: "使用滅火器時，應瞄準火源的什麼位置進行射擊？", options: ["火焰中央", "火焰最頂端", "火源底部", "水箱"], correctAnswer: "火源底部", explanation: "滅火藥劑直接噴向火源底部才能有效阻斷火勢的燃料。", keyTerms: ["滅火器", "火源底部"] },
+  { id: 12, question: "下列何者為住宅用火災警報器的種類？", options: ["偵煙式", "定溫式", "以上皆是", "閃光式"], correctAnswer: "以上皆是", explanation: "常見的家警器分為偵煙式（感應煙霧）和定溫式（感應溫度）兩種。", keyTerms: ["偵煙式", "定溫式"] },
+  { id: 13, question: "下列何者不屬於應報案的情形？", options: ["聞到濃濃的燒焦味", "家裡失火", "有人受困火場", "看到路邊有火警假警報器"], correctAnswer: "看到路邊有火警假警報器", explanation: "報案是針對正在發生或即將發生火災的緊急情況。路邊的假警報器非緊急狀況，應通報相關單位處理。", keyTerms: ["報案"] },
+  { id: 14, question: "如果你是在公共場所，發現火災時，應大聲喊叫或以其他方法通知他人，立即撥打119報案，並啟動場所內警報設備，然後往逃生避難設備逃生。", options: ["正確", "錯誤"], correctAnswer: "正確", explanation: "火災報案、通知他人與啟動警報是公共場所火災初期應變的重要步驟。", keyTerms: ["公共場所", "119"] },
+  { id: 15, question: "若要避免發生電器火災，下列敘述何者錯誤？", options: ["電線不可壓在重物或家具下方", "延長線不要串接延長線", "電線走火時，可以用水滅火", "用電量較大的電器，應使用獨立插座"], correctAnswer: "電線走火時，可以用水滅火", explanation: "電線走火是電器火災，用水滅火可能導致觸電危險或擴大短路。應使用乾粉滅火器或關閉電源。", keyTerms: ["電器火災", "電線走火", "用水滅火"] },
+  { id: 16, question: "住宅用火災警報器應裝設在哪些地方？", options: ["臥室", "樓梯", "廚房", "以上皆是"], correctAnswer: "以上皆是", explanation: "臥室、樓梯、走廊及廚房都是建議優先裝設的地點。", keyTerms: ["住宅用火災警報器", "臥室", "樓梯"] },
   { id: 17, question: "消防安全設備的定義，下列何者為是？", options: ["滅火設備-指以水或其他滅火藥劑滅火之器具或設備", "警報設備-指報知火災發生之器具或設備", "避難逃生設備-指火災發生時為避難而方便使用之器具或設備", "以上皆是"], correctAnswer: "以上皆是", explanation: "消防安全設備包含滅火設備、警報設備、避難逃生設備以及消防搶救上之必要設備等。", keyTerms: ["消防安全設備"] },
   { id: 18, question: "林太太居住的集合住宅，其火警探測器時常警報鳴動誤動作，造成困擾，採下列何種解決方式較佳？", options: ["將火警受信總機開關關閉", "請管委會通知合格的消防專業技術人員檢修", "把火警探測器拆下來", "放著不管"], correctAnswer: "請管委會通知合格的消防專業技術人員檢修", explanation: "集合住宅管理權人應依消防法規定，委託消防專業技術人員定期檢修。關閉主機或拆除探測器會造成安全漏洞，違法且危險。", keyTerms: ["火警探測器", "誤動作"] },
-  { id: 19, question: "乾粉滅火器之操作口訣為?", options: ["拉、瞄、壓、掃", "拉、壓、瞄、掃", "拉、壓、掃、瞄", "拉、掃、壓、瞄"], correctAnswer: "拉、瞄、壓、掃", explanation: "口訣：1.拉(插銷) 2.瞄(火源根部) 3.壓(把手) 4.掃(向火源根部左右掃射)。", keyTerms: ["乾粉滅火器", "操作口訣"] },
-  { id: 20, question: "建築物內部最主要的避難逃生途徑應為?", options: ["屋頂", "直升機", "安全梯", "雲梯車"], correctAnswer: "安全梯", explanation: "避難逃生應以樓梯、通道、安全門為主，安全梯具有防火時效及排煙功能，是最主要的逃生路徑。", keyTerms: ["避難逃生途徑"] }
+  { id: 19, question: "乾粉滅火器之操作口訣為?", options: ["拉、瞄、壓、掃", "拉、壓、瞄、掃", "拉、壓、掃、瞄", "拉、掃、壓、瞄"], correctAnswer: "拉、瞄、壓、掃", explanation: "口訣：1.拉插銷 2.瞄火源底部 3.壓握把 4.掃左右。", keyTerms: ["乾粉滅火器", "口訣"] },
+  { id: 20, question: "火場逃生時，為避免吸入濃煙，下列何種逃生姿勢最正確？", options: ["站立逃生", "趴在地上逃生", "用濕毛巾摀口鼻逃生", "彎腰低姿勢逃生"], correctAnswer: "彎腰低姿勢逃生", explanation: "濃煙會向上竄升，所以應採低姿勢逃生，但不是趴著，以免阻礙移動速度。", keyTerms: ["濃煙", "低姿勢逃生"] },
 ];
 
-// Custom icons with a more illustrative style (保持不變)
-const CustomAward = () => <img src="https://www.svgrepo.com/show/305286/prize-cup.svg" alt="Award" className="w-16 h-16" />;
-const CustomAlert = () => <img src="https://www.svgrepo.com/show/441443/alert-triangle-danger.svg" alt="Alert" className="w-16 h-16" />;
-const CustomCross = () => <img src="https://www.svgrepo.com/show/448208/cross.svg" alt="Cross" className="w-16 h-16" />;
-const CustomHelp = () => <img src="https://www.svgrepo.com/show/496078/question-circle.svg" alt="Help" className="w-6 h-6 text-blue-500" />;
-
-
-export default function App() {
+const App = () => {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [score, setScore] = useState(0);
-  const [showResult, setShowResult] = useState(false);
   const [selectedOption, setSelectedOption] = useState(null);
   const [isAnswered, setIsAnswered] = useState(false);
-  
-  // --- [Gemini State] ---
+  const [score, setScore] = useState(0);
+  const [isFinished, setIsFinished] = useState(false);
+  const [geminiText, setGeminiText] = useState("");
   const [geminiLoading, setGeminiLoading] = useState(false);
-  const [geminiText, setGeminiText] = useState(null);
-  const [audioUrl, setAudioUrl] = useState(null);
-  const [showGeminiPanel, setShowGeminiPanel] = useState(false);
-  const [termLoading, setTermLoading] = useState(false);
+  const [isAudioPlaying, setIsAudioPlaying] = useState(false);
   const [termExplanations, setTermExplanations] = useState({});
-  // --- [Gemini State 結束] ---
+  const [termLoading, setTermLoading] = useState(false);
 
   const currentQuestion = questionsData[currentQuestionIndex];
-  
-  // --- [Gemini 清理函式] ---
-  const cleanupGemini = useCallback(() => {
-    if (audioUrl) {
-        URL.revokeObjectURL(audioUrl);
-    }
-    setGeminiText(null);
-    setAudioUrl(null);
-    setShowGeminiPanel(false);
-    setTermExplanations({});
-    setGeminiLoading(false);
-    setTermLoading(false);
-  }, [audioUrl]);
-  
-  // 在切換題目時清理 AI 相關的狀態
-  useEffect(() => {
-      cleanupGemini();
-  }, [currentQuestionIndex, cleanupGemini]);
 
-  // --- [Gemini API 邏輯 - **已移除硬編碼 API Key**] ---
-  const generateSummaryAndTts = useCallback(async (question, explanation) => {
-    // ⚠️ 請確保 `API_KEY` 是從安全的環境變數中取得，且最好通過後端代理呼叫
-    //const API_KEY = ""; // 🚨 placeholder, MUST be replaced with a secure method
-	const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+  // --- [瀏覽器內建語音播放 (Web Speech API)] ---
+  const speakText = useCallback((text) => {
+    if (!('speechSynthesis' in window)) {
+      console.error("Browser does not support text-to-speech");
+      return;
+    }
+    
+    window.speechSynthesis.cancel(); // 停止目前播放
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'zh-TW'; 
+    utterance.rate = 1.0; 
+    utterance.pitch = 1.0; 
+
+    utterance.onstart = () => setIsAudioPlaying(true);
+    utterance.onend = () => setIsAudioPlaying(false);
+    utterance.onerror = (e) => {
+        console.error("Speech synthesis error", e);
+        setIsAudioPlaying(false);
+    };
+
+    window.speechSynthesis.speak(utterance);
+  }, []);
+
+  const stopSpeaking = useCallback(() => {
+      window.speechSynthesis.cancel();
+      setIsAudioPlaying(false);
+  }, []);
+
+  // --- [Gemini API 呼叫核心 - 終極智慧重試機制] ---
+  // 自動嘗試不同的模型名稱，包含您看到的 'gemini-pro-latest'
+  const callGeminiAPI = async (API_KEY, payload) => {
+    // 定義嘗試的模型順序，加入您的 Key 能看到的確切名稱
+    const modelsToTry = [
+        "gemini-pro-latest", // 您的清單中看到的名稱，優先嘗試
+        "gemini-1.5-flash", 
+        "gemini-pro",
+        "gemini-1.5-flash-001"
+    ];
+
+    let lastError = null;
+
+    for (const modelName of modelsToTry) {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${API_KEY}`;
+        
+        try {
+            console.log(`Trying Gemini model: ${modelName}`);
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await response.json();
+
+            // 檢查是否成功 (有 candidates 代表成功)
+            if (response.ok && data.candidates && data.candidates.length > 0) {
+                console.log(`Success with model: ${modelName}`);
+                return data.candidates[0].content.parts[0].text;
+            } else {
+                // 如果 API 回傳錯誤結構
+                const errorMsg = data.error?.message || "Unknown error";
+                console.warn(`Model ${modelName} failed:`, errorMsg);
+                lastError = errorMsg;
+                // 迴圈繼續，嘗試下一個模型...
+            }
+        } catch (error) {
+            console.error(`Network error with model ${modelName}:`, error);
+            lastError = error.message;
+        }
+    }
+    
+    // 如果所有模型都失敗，拋出最後一個錯誤
+    throw new Error(lastError || "All models failed. Please check API Key.");
+  };
+
+
+  // --- [生成重點總結] ---
+  const handleGenerateSummary = useCallback(async () => {
+    if (geminiLoading) return;
+    setGeminiLoading(true);
+    setGeminiText("");
+    stopSpeaking();
+
+    const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
     if (!API_KEY) {
-        setGeminiText("🚨 API Key 未設定或無效。請檢查配置。");
+        setGeminiText("🚨 錯誤：未讀取到 API Key。請檢查 .env 檔案。");
         setGeminiLoading(false);
         return;
     }
-    
-    // 1. Reset states
-    setGeminiLoading(true);
-    setGeminiText(null);
-    setAudioUrl(null);
-    setShowGeminiPanel(true);
-    
-    // API URLs (使用變數傳入 API Key)
-    const geminiFlashUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${API_KEY}`;
-    const geminiTtsUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${API_KEY}`;
 
-    const prompt = `你是一位熱心又專業的消防宣導員。請用簡潔、鼓勵且口語化的方式，根據以下問題和正確解析，為學生提供一個重點複習，長度約 50 字中文。請特別強調安全的重要性。
-    問題: "${question}"
-    正確解析: "${explanation}"
-    總結重點：`;
+    const payload = {
+      contents: [{ 
+        parts: [{ 
+          text: `針對這個問題的答案和解釋，請用不超過 50 個字的口語化、親切語氣，寫一個台灣消防安全知識的重點總結。
+          問題: ${currentQuestion.question}
+          答案: ${currentQuestion.correctAnswer}
+          解釋: ${currentQuestion.explanation}` 
+        }] 
+      }]
+    };
 
     try {
-        // --- 1. Text Generation (Summary) ---
-        const textPayload = {
-            contents: [{ parts: [{ text: prompt }] }],
-            systemInstruction: { parts: [{ text: "你是一位熱心又專業的消防宣導員，用親切和鼓勵的口吻提供重點複習。" }] },
-            generationConfig: {
-                temperature: 0.7,
-                maxOutputTokens: 100,
-            }
-        };
-
-        let summaryText = null;
-        let attempt = 0;
-        
-        while (attempt < 5) { // Retry logic (Text)
-            const delay = Math.pow(2, attempt) * 1000;
-            if (attempt > 0) await new Promise(resolve => setTimeout(resolve, delay));
-            
-            try {
-                const textResponse = await fetch(geminiFlashUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(textPayload)
-                });
-                
-                if (textResponse.ok) {
-                    const result = await textResponse.json();
-                    summaryText = result.candidates?.[0]?.content?.parts?.[0]?.text;
-                    if (summaryText) break;
-                }
-            } catch (error) { /* Ignore internal error for retry */ }
-            attempt++;
-        }
-
-        if (!summaryText) {
-            setGeminiText("⚠️ 無法生成文字總結，請稍後再試。");
-            setGeminiLoading(false);
-            return;
-        }
-        
-        setGeminiText(summaryText.trim());
-
-        // --- 2. TTS Generation (Audio) ---
-        const ttsPayload = {
-            contents: [{
-                parts: [{ text: `請用親切的語氣朗讀這段文字：${summaryText}` }]
-            }],
-            generationConfig: {
-                responseModalities: ["AUDIO"],
-                speechConfig: {
-                    voiceConfig: {
-                        prebuiltVoiceConfig: { voiceName: "Kore" } // A firm, clear voice
-                    },
-                    languageCode: "zh-TW"  
-                }
-            },
-            model: "gemini-2.5-flash-preview-tts"
-        };
-        
-        let audioResponse;
-        attempt = 0;
-        
-        while (attempt < 5) { // Retry logic (TTS)
-            const delay = Math.pow(2, attempt) * 1000;
-            if (attempt > 0) await new Promise(resolve => setTimeout(resolve, delay));
-            
-            try {
-                audioResponse = await fetch(geminiTtsUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(ttsPayload)
-                });
-
-                if (audioResponse.ok) {
-                    const result = await audioResponse.json();
-                    const part = result?.candidates?.[0]?.content?.parts?.[0];
-                    const audioData = part?.inlineData?.data;
-                    const mimeType = part?.inlineData?.mimeType;
-
-                    if (audioData && mimeType && mimeType.startsWith("audio/")) {
-                        const rateMatch = mimeType.match(/rate=(\d+)/);
-                        const sampleRate = rateMatch ? parseInt(rateMatch[1], 10) : 24000;
-                        
-                        const pcmData = base64ToArrayBuffer(audioData);
-                        const pcm16 = new Int16Array(pcmData);
-                        const wavBlob = pcmToWav(pcm16, sampleRate);
-                        const url = URL.createObjectURL(wavBlob);
-                        setAudioUrl(url);
-                        break;
-                    }
-                }
-            } catch (error) { /* Ignore internal error for retry */ }
-            attempt++;
-        }
-        
-        if (!audioResponse || !audioResponse.ok) {
-             console.error("TTS generation failed after retries.");
-        }
-
+        // 使用新的呼叫函式
+        const text = await callGeminiAPI(API_KEY, payload);
+        setGeminiText(text.trim());
+        speakText(text.trim());
     } catch (error) {
-        console.error("Gemini API call failed:", error);
-        setGeminiText("⚠️ 系統錯誤，無法生成輔助內容。");
+        setGeminiText(`⚠️ 生成失敗 (所有模型皆嘗試無效)：\n${error.message}`);
     } finally {
         setGeminiLoading(false);
     }
-  }, []); 
+  }, [currentQuestion, speakText, stopSpeaking]);
 
-  const generateTermExplanation = async (term) => {
-      setTermLoading(true);
-      
-      // ⚠️ 請確保 `API_KEY` 是從安全的環境變數中取得，且最好通過後端代理呼叫
-      const API_KEY = ""; // 🚨 placeholder, MUST be replaced with a secure method
-      if (!API_KEY) {
-          setTermExplanations(prev => ({ ...prev, [term]: "🚨 API Key 未設定或無效。請檢查配置。" }));
-          setTermLoading(false);
-          return;
-      }
+  // --- [術語解釋] ---
+  const handleExplainTerm = async (term) => {
+    if (termLoading || termExplanations[term]) return;
+    setTermLoading(true);
 
-      const geminiFlashUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${API_KEY}`;
+    const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+    if (!API_KEY) {
+        setTermExplanations(prev => ({ ...prev, [term]: "🚨 API Key 未設定。" }));
+        setTermLoading(false);
+        return;
+    }
 
-      const prompt = `請以簡短、專業且易懂的方式，解釋以下消防安全詞彙，長度約 30 字中文："${term}"。`;
+    const payload = {
+      contents: [{ 
+        parts: [{ 
+          text: `請用簡潔的白話文，解釋「${term}」這個消防安全或防災相關的名詞。` 
+        }] 
+      }]
+    };
 
-      try {
-          const textPayload = {
-              contents: [{ parts: [{ text: prompt }] }],
-              systemInstruction: { parts: [{ text: "你是一位專業的消防術語講師，用精煉的語言解釋詞彙。" }] },
-              generationConfig: {
-                  temperature: 0.5,
-                  maxOutputTokens: 80,
-              }
-          };
-
-          let explanationText = null;
-          let attempt = 0;
-          
-          while (attempt < 5) { // Retry logic
-              const delay = Math.pow(2, attempt) * 1000;
-              if (attempt > 0) await new Promise(resolve => setTimeout(resolve, delay));
-              
-              try {
-                  const textResponse = await fetch(geminiFlashUrl, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify(textPayload)
-                  });
-                  
-                  if (textResponse.ok) {
-                      const result = await textResponse.json();
-                      explanationText = result.candidates?.[0]?.content?.parts?.[0]?.text;
-                      if (explanationText) break;
-                  }
-              } catch (error) { /* Ignore internal error for retry */ }
-              attempt++;
-          }
-
-          setTermExplanations(prev => ({
-              ...prev,
-              [term]: explanationText ? explanationText.trim() : "無法生成解說。"
-          }));
-          
-      } catch (error) {
-          console.error("Gemini Term API call failed:", error);
-          setTermExplanations(prev => ({
-              ...prev,
-              [term]: "⚠️ 系統錯誤，無法生成解說。"
-          }));
-      } finally {
-          setTermLoading(false);
-      }
+    try {
+        const text = await callGeminiAPI(API_KEY, payload);
+        setTermExplanations(prev => ({ ...prev, [term]: text.trim() }));
+    } catch (error) {
+        setTermExplanations(prev => ({ ...prev, [term]: `⚠️ 錯誤: ${error.message}` }));
+    } finally {
+      setTermLoading(false);
+    }
   };
-  // --- [Gemini API 邏輯結束] ---
 
 
+  // --- [測驗邏輯] ---
   const handleOptionClick = (option) => {
     if (isAnswered) return;
-    
     setSelectedOption(option);
     setIsAnswered(true);
-
     if (option === currentQuestion.correctAnswer) {
       setScore(score + 1);
     }
   };
 
   const handleNextQuestion = () => {
+    stopSpeaking(); 
+    setGeminiText(""); 
     if (currentQuestionIndex + 1 < questionsData.length) {
       setCurrentQuestionIndex(currentQuestionIndex + 1);
       setSelectedOption(null);
       setIsAnswered(false);
     } else {
-      setShowResult(true);
+      setIsFinished(true);
     }
   };
 
-  const restartQuiz = () => {
-    cleanupGemini();
-    setScore(0);
+  const handleRestartQuiz = () => {
+    stopSpeaking();
     setCurrentQuestionIndex(0);
-    setShowResult(false);
     setSelectedOption(null);
     setIsAnswered(false);
+    setScore(0);
+    setIsFinished(false);
+    setGeminiText("");
+    setTermExplanations({});
   };
 
-  // Progress Percentage
-  const progress = ((currentQuestionIndex + 1) / questionsData.length) * 100;
-
-  // Custom icons
-  const CustomAward = () => <img src="https://www.svgrepo.com/show/305286/prize-cup.svg" alt="Award" className="w-16 h-16" />;
-  const CustomAlert = () => <img src="https://www.svgrepo.com/show/441443/alert-triangle-danger.svg" alt="Alert" className="w-16 h-16" />;
-  const CustomCross = () => <img src="https://www.svgrepo.com/show/448208/cross.svg" alt="Cross" className="w-16 h-16" />;
-  const CustomHelp = () => <img src="https://www.svgrepo.com/show/496078/question-circle.svg" alt="Help" className="w-6 h-6 text-blue-700" />;
+  useEffect(() => {
+    return () => {
+        window.speechSynthesis.cancel();
+    };
+  }, []);
 
 
-  if (showResult) {
+  // --- [JSX 渲染輔助組件] ---
+  const CustomHelp = () => (
+    <HelpCircle className="w-6 h-6 text-blue-500 mr-1" />
+  );
+
+  const CustomBot = () => (
+    <Bot className="w-5 h-5 text-green-500 mr-2" />
+  );
+
+  const CustomVolume = () => (
+    <Volume2 className={`w-5 h-5 transition-colors ${isAudioPlaying ? 'text-blue-500 animate-pulse' : 'text-gray-400'}`} />
+  );
+
+
+  // --- [主要渲染] ---
+  if (isFinished) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-100 to-indigo-200 flex flex-col items-center justify-center p-4 font-sans">
-        <div className="max-w-md w-full bg-white rounded-3xl shadow-2xl overflow-hidden p-8 text-center animate-fade-in-up transform transition-all duration-500 scale-100 hover:scale-[1.01]">
-          <div className="flex justify-center mb-6">
-            {score >= 16 ? (
-              <div className="p-4 bg-yellow-100 rounded-full">
-                <CustomAward />
-              </div>
-            ) : score >= 10 ? (
-              <div className="p-4 bg-orange-100 rounded-full">
-                <CustomAlert />
-              </div>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex flex-col items-center justify-center py-8 px-4 font-sans">
+        <div className="w-full max-w-2xl bg-white p-8 md:p-10 rounded-3xl shadow-2xl border border-blue-200 animate-slide-in-up">
+          <div className="flex flex-col items-center text-center">
+            <Award className="w-16 h-16 text-yellow-500 mb-4 animate-bounce-slow" />
+            <h2 className="text-3xl md:text-4xl font-extrabold text-slate-800 mb-2 tracking-wide">測驗結果</h2>
+            <p className="text-xl text-slate-600 mb-6">您已完成所有 {questionsData.length} 道題目！</p>
+            <div className="bg-blue-50 p-6 rounded-xl w-full mb-8 shadow-inner">
+              <p className="text-5xl font-black text-blue-700">
+                {score} / {questionsData.length}
+              </p>
+              <p className="text-lg font-semibold text-blue-600 mt-2">
+                總得分
+              </p>
+            </div>
+            
+            {score / questionsData.length >= 0.8 ? (
+              <p className="text-green-600 font-bold text-lg mb-8">
+                🎉 恭喜您！您的消防安全知識非常優秀！
+              </p>
             ) : (
-              <div className="p-4 bg-red-100 rounded-full">
-                <CustomCross />
-              </div>
+              <p className="text-red-600 font-bold text-lg mb-8">
+                💡 知識可以更精進喔！重新測驗以加深印象。
+              </p>
             )}
-          </div>
-          
-          <h2 className="text-4xl font-extrabold text-slate-800 mb-2 font-serif tracking-tight">測驗完成！</h2>
-          <p className="text-slate-600 mb-6 text-lg font-medium">您的防災知識掌握度</p>
-          
-          <div className="text-6xl font-black text-blue-700 mb-4 animate-bounce-in">
-            {score} <span className="text-3xl text-slate-400">/ {questionsData.length}</span>
-          </div>
-          
-          <p className="text-xl mb-8 font-semibold leading-relaxed text-slate-700">
-            {score === 20 ? "🎉 太厲害了！您是防災達人！" : 
-              score >= 16 ? "👍 表現優秀！只要再注意小細節即可。" :
-              score >= 12 ? "🤔 還不錯，建議多複習防災觀念喔。" :
-              "🚨 為了安全，請務必重新學習防災知識！"}
-          </p>
 
-          <button 
-            onClick={restartQuiz}
-            className="w-full flex items-center justify-center py-4 bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 text-white rounded-xl font-bold text-lg transition-all duration-300 shadow-xl hover:shadow-2xl active:scale-95 transform"
-          >
-            <RotateCcw className="w-5 h-5 mr-2" />
-            重新測驗
-          </button>
+            <button 
+              onClick={handleRestartQuiz}
+              className="w-full py-3 flex items-center justify-center bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 text-white rounded-xl font-bold text-lg transition-all duration-300 shadow-xl hover:shadow-2xl active:scale-95 transform" 
+            >
+              <RotateCcw className="w-5 h-5 mr-2" /> 重新測驗
+            </button>
+          </div>
         </div>
       </div>
     );
   }
+
+  const CurrentIconComponent = questionIconMap[currentQuestion.id] || GeneralSafetyIcon;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex flex-col items-center py-8 px-4 font-sans">
@@ -449,7 +359,7 @@ export default function App() {
       <div className="w-full max-w-2xl mb-8">
         <div className="flex justify-between items-end mb-3 px-2">
           <h1 className="text-2xl font-extrabold text-slate-800 flex items-center tracking-wide">
-            <CustomHelp />
+            <CustomHelp /> 
             <span className="ml-2 text-blue-700">消防安全知識測驗</span>
           </h1>
           <span className="text-md font-semibold text-slate-500">
@@ -458,146 +368,127 @@ export default function App() {
         </div>
         <div className="h-3 w-full bg-slate-200 rounded-full overflow-hidden shadow-inner">
           <div 
-            className="h-full bg-gradient-to-r from-blue-500 to-indigo-600 transition-all duration-500 ease-out rounded-full"
-            style={{ width: `${progress}%` }}
-          ></div>
+            className="h-full bg-blue-500 transition-all duration-500 ease-out" 
+            style={{ width: `${((currentQuestionIndex + 1) / questionsData.length) * 100}%` }}
+          />
         </div>
       </div>
 
-      {/* Question Card */}
-      <div className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-100 transform transition-all duration-300 hover:scale-[1.005]">
-        <div className="p-6 md:p-10">
-          {/* Question Image */}
-          {questionImages[currentQuestion.id] && (
-            <div className="flex justify-center mb-6">
-              <img src={questionImages[currentQuestion.id]} alt="Question illustration" className="w-32 h-32 object-contain animate-float" />
-            </div>
-          )}
-
-          <h3 className="text-xl md:text-2xl font-bold text-blue-800 mb-8 leading-relaxed tracking-wide">
-            {currentQuestion.question}
-          </h3>
-
-          <div className="space-y-4">
-            {currentQuestion.options.map((option, index) => {
-              const isSelected = selectedOption === option;
-              const isCorrect = option === currentQuestion.correctAnswer;
-              
-              let buttonStyle = "border-slate-300 bg-white text-slate-700 hover:border-blue-500 hover:bg-blue-50";
-              let textStyle = "text-slate-700";
-              let icon = null;
-
-              if (isAnswered) {
-                if (isCorrect) {
-                  buttonStyle = "bg-green-50 border-green-500 text-green-800 shadow-md";
-                  textStyle = "text-green-800 font-semibold";
-                  icon = <CheckCircle className="w-5 h-5 text-green-600" />;
-                } else if (isSelected && !isCorrect) {
-                  buttonStyle = "bg-red-50 border-red-500 text-red-800 shadow-md";
-                  textStyle = "text-red-800 font-semibold";
-                  icon = <XCircle className="w-5 h-5 text-red-600" />;
-                } else {
-                  buttonStyle = "border-slate-200 bg-slate-50 text-slate-500 opacity-70 cursor-not-allowed";
-                  textStyle = "text-slate-500";
-                }
-              }
-
-              return (
-                <button
-                  key={index}
-                  onClick={() => handleOptionClick(option)}
-                  disabled={isAnswered}
-                  className={`w-full p-4 rounded-xl border-2 text-left text-lg font-medium transition-all duration-200 flex justify-between items-center ${buttonStyle} transform hover:-translate-y-0.5`}
-                >
-                  <span className={`flex-1 ${textStyle}`}>{option}</span>
-                  {icon}
-                </button>
-              );
-            })}
-          </div>
+      {/* Main Card */}
+      <div className="w-full max-w-2xl bg-white p-6 md:p-8 rounded-3xl shadow-2xl border border-blue-200 animate-fade-in-up">
+        
+        {/* Question Image/Icon */}
+        <div className="flex justify-center mb-6">
+            <CurrentIconComponent className="w-32 h-32 object-contain animate-float" />
         </div>
 
-        {/* Feedback Section */}
+        {/* Question Text */}
+        <h2 className="text-xl md:text-2xl font-bold text-slate-800 mb-6 text-center leading-relaxed">
+          {currentQuestion.question}
+        </h2>
+
+        {/* Options */}
+        <div className="space-y-4 mb-8">
+          {currentQuestion.options.map((option, index) => {
+            const isCorrect = option === currentQuestion.correctAnswer;
+            const isSelected = option === selectedOption;
+            
+            let buttonClass = "bg-slate-100 text-slate-700 hover:bg-blue-100 hover:text-blue-700";
+            if (isAnswered) {
+              if (isSelected && isCorrect) {
+                buttonClass = "bg-green-100 text-green-800 border-green-400 shadow-lg";
+              } else if (isSelected && !isCorrect) {
+                buttonClass = "bg-red-100 text-red-800 border-red-400 shadow-lg line-through opacity-70";
+              } else if (isCorrect) {
+                buttonClass = "bg-green-50 text-green-700 border-green-300 shadow-md";
+              } else {
+                buttonClass = "bg-slate-100 text-slate-500 opacity-50";
+              }
+            }
+
+            return (
+              <button
+                key={index}
+                onClick={() => handleOptionClick(option)}
+                disabled={isAnswered}
+                className={`w-full text-left p-4 rounded-xl border-2 font-semibold transition-all duration-200 flex items-center justify-between transform hover:scale-[1.01] ${buttonClass}`}
+              >
+                <span>{option}</span>
+                {isAnswered && isSelected && (
+                  isCorrect ? <CheckCircle className="w-6 h-6 text-green-600 flex-shrink-0 ml-2" /> : <XCircle className="w-6 h-6 text-red-600 flex-shrink-0 ml-2" />
+                )}
+                {isAnswered && !isSelected && isCorrect && (
+                  <CheckCircle className="w-6 h-6 text-green-600 flex-shrink-0 ml-2" />
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Answer Explanation and Next Button */}
         {isAnswered && (
-          <div className={`p-6 md:p-8 border-t-2 animate-fade-in transition-colors duration-300 ${selectedOption === currentQuestion.correctAnswer ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
-            <div className="flex items-start mb-5">
-              <div className={`p-2 rounded-full mr-4 shrink-0 shadow-sm ${selectedOption === currentQuestion.correctAnswer ? 'bg-green-200' : 'bg-red-200'}`}>
-                {selectedOption === currentQuestion.correctAnswer ? 
-                  <CheckCircle className="w-7 h-7 text-green-700" /> : 
-                  <XCircle className="w-7 h-7 text-red-700" />
-                }
-              </div>
-              <div>
-                <h4 className={`text-xl font-bold mb-2 tracking-wide ${selectedOption === currentQuestion.correctAnswer ? 'text-green-800' : 'text-red-800'}`}>
+          <div className="animate-slide-down">
+            <div className={`p-4 md:p-6 rounded-xl mb-6 shadow-md border-l-4 ${selectedOption === currentQuestion.correctAnswer ? 'bg-green-50 border-green-500' : 'bg-red-50 border-red-500'}`}>
+              <div className="flex items-center mb-3">
+                {selectedOption === currentQuestion.correctAnswer ? <CheckCircle className="w-7 h-7 text-green-700" /> : <XCircle className="w-7 h-7 text-red-700" /> }
+                <h4 className={`text-xl font-bold ml-3 tracking-wide ${selectedOption === currentQuestion.correctAnswer ? 'text-green-800' : 'text-red-800'}`}>
                   {selectedOption === currentQuestion.correctAnswer ? '答對了！' : '答錯了！'}
                 </h4>
-                <p className="text-slate-700 leading-relaxed text-base md:text-lg">
-                  <span className="font-bold text-slate-800">解析：</span>
-                  <span className="text-gray-600">{currentQuestion.explanation}</span>
-                </p>
               </div>
+              <p className="text-slate-700 leading-relaxed text-base md:text-lg">
+                <span className="font-bold block mb-1">正解：{currentQuestion.correctAnswer}</span>
+                <span className="font-bold text-indigo-600 block mt-3">💡 解釋：</span>
+                {currentQuestion.explanation}
+              </p>
             </div>
 
             {/* AI Assistant Features */}
-            <div className="space-y-4 mb-6">
-                <button
-                    onClick={() => generateSummaryAndTts(currentQuestion.question, currentQuestion.explanation)}
-                    disabled={geminiLoading}
-                    className="w-full flex items-center justify-center py-3 px-4 bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white rounded-xl font-bold shadow-lg transition-all duration-300 disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                    {geminiLoading && showGeminiPanel ? (
-                      <>
-                        <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        ✨ AI 語音複習中...
-                      </>
-                    ) : (
-                      <>
-                        <Volume2 className="w-5 h-5 mr-2" />
-                        ✨ 啟動 AI 語音複習
-                      </>
-                    )}
-                </button>
-                
-                {/* AI Explanation Panel */}
-                {showGeminiPanel && (
-                  <div className="bg-orange-100 border border-orange-300 rounded-xl p-4 text-sm mt-3 animate-fade-in">
-                    <div className="flex items-center mb-2">
-                        <Bot className="w-5 h-5 text-orange-600 mr-2 shrink-0" />
-                        <span className="font-bold text-orange-800">AI 消防宣導員提醒您：</span>
-                    </div>
-                    {geminiText ? (
-                        <>
-                            <p className="text-orange-700 leading-relaxed mb-3">{geminiText}</p>
-                            {audioUrl && (
-                                <audio controls autoPlay className="w-full mt-2">
-                                    <source src={audioUrl} type="audio/wav" />
-                                    您的瀏覽器不支援音訊播放。
-                                </audio>
-                            )}
-                        </>
-                    ) : (
-                        <p className="text-orange-700">等待 AI 生成重點總結...</p>
-                    )}
-                  </div>
-                )}
-
-                {/* AI Terminology Explanation Buttons */}
-                <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-200">
-                    <span className="text-sm font-semibold text-slate-600 w-full mb-1">關鍵詞彙解說：</span>
-                    {currentQuestion.keyTerms && currentQuestion.keyTerms.map(term => (
-                        <div key={term} className="flex flex-col w-full md:w-auto">
+            <div className="mb-6 p-4 bg-indigo-50 rounded-xl shadow-inner border border-indigo-200">
+                <h5 className="text-lg font-bold text-indigo-700 mb-3 flex items-center">
+                    <CustomBot /> AI 消防安全助手
+                </h5>
+                <div className="mb-4">
+                    <button
+                        onClick={handleGenerateSummary}
+                        disabled={geminiLoading}
+                        className={`w-full py-2 flex items-center justify-center rounded-lg font-semibold transition-all duration-300 transform ${
+                            geminiLoading
+                                ? 'bg-slate-300 text-slate-600 cursor-not-allowed'
+                                : 'bg-blue-200 text-blue-800 hover:bg-blue-300 active:scale-98'
+                        }`}
+                    >
+                        {geminiLoading ? '生成中...' : '💬 生成重點總結 (含語音)'}
+                        {(geminiText && !geminiLoading) && (
                           <button
-                            onClick={() => generateTermExplanation(term)}
+                            onClick={(e) => { e.stopPropagation(); isAudioPlaying ? stopSpeaking() : speakText(geminiText); }}
+                            className="ml-3 p-1 rounded-full hover:bg-blue-400 active:scale-95 transition-all"
+                            title={isAudioPlaying ? "停止播放" : "播放語音"}
+                          >
+                            {isAudioPlaying ? <VolumeX className="w-5 h-5 text-red-500" /> : <CustomVolume />}
+                          </button>
+                        )}
+                    </button>
+                    {geminiText && (
+                        <div className={`mt-3 p-3 rounded-lg border border-blue-300 bg-white text-slate-800 text-sm animate-fade-in`}>
+                          <p style={{whiteSpace: 'pre-wrap'}}>{geminiText}</p>
+                        </div>
+                    )}
+                </div>
+
+                <div className="mt-4 border-t border-indigo-200 pt-3">
+                    <p className="text-sm font-semibold text-indigo-600 mb-2">點擊查詢相關術語：</p>
+                    <div className="flex flex-wrap gap-2">
+                    {currentQuestion.keyTerms.map((term, index) => (
+                        <div key={index} className="max-w-full">
+                          <button
+                            onClick={() => handleExplainTerm(term)}
                             disabled={termLoading}
                             className={`flex items-center px-3 py-2 text-xs font-semibold rounded-full transition-all duration-200 shadow-md ${
-                                termLoading ? 'bg-slate-400 text-white' : 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200'
+                                termLoading && !termExplanations[term] ? 'bg-slate-400 text-white animate-pulse' : 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200'
                             }`}
                           >
                             <BookOpen className="w-4 h-4 mr-1" />
-                            ✨ 什麼是 "{term}"?
+                            {termLoading && !termExplanations[term] ? '查詢中...' : `✨ 什麼是 "${term}"?`}
                           </button>
                           {termExplanations[term] && (
                               <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-2 mt-1 text-xs text-indigo-800 animate-fade-in max-w-full">
@@ -606,6 +497,7 @@ export default function App() {
                           )}
                         </div>
                     ))}
+                    </div>
                 </div>
             </div>
             {/* End AI Assistant Features */}
@@ -623,4 +515,6 @@ export default function App() {
 
     </div>
   );
-}
+};
+
+export default App;
